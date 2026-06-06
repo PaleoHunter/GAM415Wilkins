@@ -48,6 +48,11 @@ class AGAM415FirstPersonCharacter : public ACharacter
 public:
 	AGAM415FirstPersonCharacter();
 
+public:
+
+	UPROPERTY(EditAnywhere)
+		bool isTeleporting;
+
 protected:
 	/** Called for movement input */
 	void Move(const FInputActionValue& Value);
@@ -66,6 +71,7 @@ public:
 	USkeletalMeshComponent* GetMesh1P() const { return Mesh1P; }
 	/** Returns FirstPersonCameraComponent subobject **/
 	UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
+
 
 };
 
