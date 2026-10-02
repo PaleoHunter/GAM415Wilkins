@@ -5,29 +5,30 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Components/SphereComponent.h"
 #include "Components/DecalComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraComponent.h"
 #include "PerlinProcterrain.h"
 
-AGAM415FirstPersonProjectile::AGAM415FirstPersonProjectile() 
+AGAM415FirstPersonProjectile::AGAM415FirstPersonProjectile()
 {
 	// Use a sphere as a simple collision representation
 	CollisionComp = CreateDefaultSubobject<USphereComponent>(TEXT("SphereComp"));
 	CollisionComp->InitSphereRadius(5.0f);
-	CollisionComp->BodyInstance.SetCollisionProfileName("Projectile");
-	CollisionComp->OnComponentHit.AddDynamic(this, &AGAM415FirstPersonProjectile::OnHit);		// set up a notification for when this component hits something blocking
+	CollisionComp->BodyInstance.SetCollisionProfileName(TEXT("Projectile"));
+	CollisionComp->OnComponentHit.AddDynamic(this, &AGAM415FirstPersonProjectile::OnHit);
 
 	// Players can't walk on it
 	CollisionComp->SetWalkableSlopeOverride(FWalkableSlopeOverride(WalkableSlope_Unwalkable, 0.f));
 	CollisionComp->CanCharacterStepUpOn = ECB_No;
 
-	ballMesh = CreateDefaultSubobject<UStaticMeshComponent>("Ball Mesh");
+	// Visual mesh
+	BallMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Ball Mesh"));
 
 	// Set as root component
-	RootComponent = CollisionComp;
-
-	ballMesh->SetupAttachment(CollisionComp);
+	RootComponent = CollisionComp;          // ? fixed (was = = )
+	BallMesh->SetupAttachment(CollisionComp);
 
 	// Use a ProjectileMovementComponent to govern this projectile's movement
 	ProjectileMovement = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileComp"));
@@ -44,47 +45,100 @@ AGAM415FirstPersonProjectile::AGAM415FirstPersonProjectile()
 void AGAM415FirstPersonProjectile::BeginPlay()
 {
 	Super::BeginPlay();
-	randColor = FLinearColor(UKismetMathLibrary::RandomFloatInRange(0.f, 1.f), UKismetMathLibrary::RandomFloatInRange(0.f, 1.f), UKismetMathLibrary::RandomFloatInRange(0.f, 1.f), 1.f);
 
-	dmiMat = UMaterialInstanceDynamic::Create(projMat, this);
-	ballMesh->SetMaterial(0, dmiMat);
+	// Generate a random color for this projectile
+	RandColor = FLinearColor(
+		UKismetMathLibrary::RandomFloatInRange(0.f, 1.f),
+		UKismetMathLibrary::RandomFloatInRange(0.f, 1.f),
+		UKismetMathLibrary::RandomFloatInRange(0.f, 1.f),
+		1.f
+	);
 
-	dmiMat->SetVectorParameterValue("ProjColor", randColor);
+	// Create and apply dynamic material
+	if (ProjMat)
+	{
+		DMIMat = UMaterialInstanceDynamic::Create(ProjMat, this);
+		if (BallMesh && DMIMat)
+		{
+			BallMesh->SetMaterial(0, DMIMat);
+			DMIMat->SetVectorParameterValue(TEXT("ProjColor"), RandColor);
+		}
+	}
 }
 
-void AGAM415FirstPersonProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
+void AGAM415FirstPersonProjectile::OnHit(
+	UPrimitiveComponent* HitComp,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComp,
+	FVector NormalImpulse,
+	const FHitResult& Hit)
 {
-	// Only add impulse and destroy projectile if we hit a physics
-	if ((OtherActor != nullptr) && (OtherActor != this) && (OtherComp != nullptr) && OtherComp->IsSimulatingPhysics())
+	// Apply physics impulse if we hit a simulating component
+	if (OtherActor && OtherActor != this && OtherComp && OtherComp->IsSimulatingPhysics())
 	{
 		OtherComp->AddImpulseAtLocation(GetVelocity() * 100.0f, GetActorLocation());
-
-		Destroy();
 	}
 
-	if (OtherActor != nullptr)
+	if (!OtherActor)
 	{
-		if (colorP)
+		return;
+	}
+
+	// Spawn impact particles
+	if (ColorP)
+	{
+		UNiagaraComponent* ParticleComp = UNiagaraFunctionLibrary::SpawnSystemAttached(
+			ColorP,
+			HitComp,
+			NAME_None,
+			FVector(-20.f, 0.f, 0.f),
+			FRotator::ZeroRotator,
+			EAttachLocation::KeepRelativeOffset,
+			true
+		);
+
+		if (ParticleComp)
 		{
-			UNiagaraComponent* particleComp = UNiagaraFunctionLibrary::SpawnSystemAttached(colorP, HitComp, NAME_None, FVector(-20.f, 0.f, 0.f), FRotator(0.f), EAttachLocation::KeepRelativeOffset, true);
-			particleComp->SetNiagaraVariableLinearColor(FString("RandomColor"), randColor);
-			ballMesh->DestroyComponent();
-			CollisionComp->BodyInstance.SetCollisionProfileName("NoCollision");
+			ParticleComp->SetNiagaraVariableLinearColor(TEXT("RandomColor"), RandColor);
 		}
 
-		float frameNum = UKismetMathLibrary::RandomFloatInRange(0.f, 3.f);
-
-		auto Decal = UGameplayStatics::SpawnDecalAtLocation(GetWorld(), baseMat, FVector(UKismetMathLibrary::RandomFloatInRange(20.f, 40.f)), Hit.Location, Hit.Normal.Rotation(), 0.f);
-		auto MatInstance = Decal->CreateDynamicMaterialInstance();
-
-		MatInstance->SetVectorParameterValue("Color", randColor);
-		MatInstance->SetScalarParameterValue("Frame", frameNum);
-		
-		APerlinProcterrain* procTerrain = Cast<APerlinProcterrain>(OtherActor);
-
-		if (procTerrain)
+		// Hide the mesh and disable collision after impact
+		if (BallMesh)
 		{
-			procTerrain->AlterMesh(Hit.ImpactPoint);
+			BallMesh->DestroyComponent();
 		}
+		CollisionComp->BodyInstance.SetCollisionProfileName(TEXT("NoCollision"));
+	}
+
+	// Spawn a colored decal at the impact point
+	if (BaseMat)
+	{
+		const float FrameNum = UKismetMathLibrary::RandomFloatInRange(0.f, 3.f);
+		const float DecalSize = UKismetMathLibrary::RandomFloatInRange(20.f, 40.f);
+
+		UDecalComponent* Decal = UGameplayStatics::SpawnDecalAtLocation(
+			GetWorld(),
+			BaseMat,
+			FVector(DecalSize),
+			Hit.Location,
+			Hit.Normal.Rotation(),
+			0.f
+		);
+
+		if (Decal)
+		{
+			UMaterialInstanceDynamic* MatInstance = Decal->CreateDynamicMaterialInstance();
+			if (MatInstance)
+			{
+				MatInstance->SetVectorParameterValue(TEXT("Color"), RandColor);
+				MatInstance->SetScalarParameterValue(TEXT("Frame"), FrameNum);
+			}
+		}
+	}
+
+	// Deform procedural terrain if we hit one
+	if (APerlinProcterrain* ProcTerrain = Cast<APerlinProcterrain>(OtherActor))
+	{
+		ProcTerrain->AlterMesh(Hit.ImpactPoint);
 	}
 }

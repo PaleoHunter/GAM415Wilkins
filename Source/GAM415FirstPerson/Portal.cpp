@@ -1,41 +1,46 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "Portal.h"
 #include "GAM415FirstPersonCharacter.h"
 #include "Kismet/GameplayStatics.h"
+#include "Components/SceneCaptureComponent2D.h"
+#include "Components/ArrowComponent.h"
+#include "Components/BoxComponent.h"
+#include "Components/StaticMeshComponent.h"
 
 // Sets default values
 APortal::APortal()
 {
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
-	mesh = CreateDefaultSubobject<UStaticMeshComponent>("Mesh");
-	boxComp = CreateDefaultSubobject<UBoxComponent>("Box Comp");
-	sceneCapture = CreateDefaultSubobject<USceneCaptureComponent2D>("Capture");
-	rootArrow = CreateDefaultSubobject<UArrowComponent>("Root Arrow");
 
-	RootComponent = boxComp;
-	mesh->SetupAttachment(boxComp);
-	sceneCapture->SetupAttachment(mesh);
-	rootArrow->SetupAttachment(RootComponent);
+	BoxComp = CreateDefaultSubobject<UBoxComponent>(TEXT("Box Comp"));
+	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	SceneCapture = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("Capture"));
+	RootArrow = CreateDefaultSubobject<UArrowComponent>(TEXT("Root Arrow"));
 
-	mesh->SetCollisionResponseToAllChannels(ECR_Ignore);
+	RootComponent = BoxComp;
+	Mesh->SetupAttachment(BoxComp);
+	SceneCapture->SetupAttachment(Mesh);
+	RootArrow->SetupAttachment(RootComponent);
 
+	// Portal mesh should not block anything
+	Mesh->SetCollisionResponseToAllChannels(ECR_Ignore);
 }
 
 // Called when the game starts or when spawned
 void APortal::BeginPlay()
 {
 	Super::BeginPlay();
-	boxComp->OnComponentBeginOverlap.AddDynamic(this, &APortal::OnOverlapBegin);
-	mesh->SetHiddenInSceneCapture(true);
 
-	if (mat)
+	BoxComp->OnComponentBeginOverlap.AddDynamic(this, &APortal::OnOverlapBegin);
+
+	// Hide this portal's mesh from its own scene capture
+	Mesh->SetHiddenInSceneCapture(true);
+
+	if (Mat)
 	{
-		mesh->SetMaterial(0, mat);
+		Mesh->SetMaterial(0, Mat);
 	}
-	
 }
 
 // Called every frame
@@ -43,47 +48,70 @@ void APortal::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	UpdatePortals();
-
 }
 
-void APortal::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+void APortal::OnOverlapBegin(
+	UPrimitiveComponent* OverlappedComp,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComp,
+	int32 OtherBodyIndex,
+	bool bFromSweep,
+	const FHitResult& SweepResult)
 {
-	AGAM415FirstPersonCharacter* playerChar = Cast<AGAM415FirstPersonCharacter>(OtherActor);
-
-	if (playerChar)
+	AGAM415FirstPersonCharacter* PlayerChar = Cast<AGAM415FirstPersonCharacter>(OtherActor);
+	if (!PlayerChar || !OtherPortal)
 	{
-		if (OtherPortal)
-		{
-			if (!playerChar->isTeleporting)
-			{
-				playerChar->isTeleporting = true;
-				FVector loc = OtherPortal->rootArrow->GetComponentLocation();
-				playerChar->SetActorLocation(loc);
+		return;
+	}
 
-				FTimerHandle TimerHandle;
-				FTimerDelegate TimerDelegate;
-				TimerDelegate.BindUFunction(this, "SetBool", playerChar);
-				GetWorld()->GetTimerManager().SetTimer(TimerHandle, TimerDelegate, 1, false);
-			}
-		}
+	// Prevent rapid re-teleporting
+	if (PlayerChar->bIsTeleporting)
+	{
+		return;
+	}
+
+	PlayerChar->bIsTeleporting = true;
+
+	// Teleport the player to the other portal's arrow location
+	const FVector TargetLocation = OtherPortal->RootArrow->GetComponentLocation();
+	PlayerChar->SetActorLocation(TargetLocation);
+
+	// Reset the teleport flag after a short delay
+	FTimerHandle TimerHandle;
+	FTimerDelegate TimerDelegate;
+	TimerDelegate.BindUFunction(this, FName("SetBool"), PlayerChar);
+	GetWorldTimerManager().SetTimer(TimerHandle, TimerDelegate, 1.0f, false);
+}
+
+void APortal::SetBool(AGAM415FirstPersonCharacter* PlayerChar)
+{
+	if (PlayerChar)
+	{
+		PlayerChar->bIsTeleporting = false;
 	}
 }
-
-void APortal::SetBool(AGAM415FirstPersonCharacter* playerChar)
-{
-	if (playerChar)
-	{
-		playerChar->isTeleporting = false;
-	}
-}
-
 
 void APortal::UpdatePortals()
 {
-	FVector Location = this->GetActorLocation() - OtherPortal->GetActorLocation();
-	FVector camLocation = UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0)->GetTransformComponent()->GetComponentLocation();
-	FRotator camRotation = UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0)->GetTransformComponent()->GetComponentRotation();
-	FVector CombinedLocation = camLocation + Location;
+	if (!OtherPortal || !SceneCapture)
+	{
+		return;
+	}
 
-	sceneCapture->SetWorldLocationAndRotation(CombinedLocation, camRotation);
+	// Calculate the relative offset between the two portals
+	const FVector LocationOffset = GetActorLocation() - OtherPortal->GetActorLocation();
+
+	// Get the player's camera transform
+	APlayerCameraManager* CameraManager = UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0);
+	if (!CameraManager)
+	{
+		return;
+	}
+
+	const FVector CamLocation = CameraManager->GetTransformComponent()->GetComponentLocation();
+	const FRotator CamRotation = CameraManager->GetTransformComponent()->GetComponentRotation();
+
+	// Position the scene capture so it shows the correct view through the other portal
+	const FVector CombinedLocation = CamLocation + LocationOffset;
+	SceneCapture->SetWorldLocationAndRotation(CombinedLocation, CamRotation);
 }

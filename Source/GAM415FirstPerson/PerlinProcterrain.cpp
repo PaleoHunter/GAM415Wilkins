@@ -1,50 +1,55 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "PerlinProcterrain.h"
 #include "ProceduralMeshComponent.h"
 #include "KismetProceduralMeshLibrary.h"
 
-// Sets default values
 APerlinProcterrain::APerlinProcterrain()
 {
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = false;
 
-	ProcMesh = CreateDefaultSubobject<UProceduralMeshComponent>("Procedural Mesh");
+	ProcMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("Procedural Mesh"));
 	ProcMesh->SetupAttachment(GetRootComponent());
-
 }
 
-// Called when the game starts or when spawned
 void APerlinProcterrain::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
 	CreateVertices();
 	CreateTriangles();
 	ProcMesh->CreateMeshSection(sectionID, Vertices, Triangles, Normals, UV0, UpVertexColors, TArray<FProcMeshTangent>(), true);
 	ProcMesh->SetMaterial(0, Mat);
 }
 
-// Called every frame
 void APerlinProcterrain::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
 }
 
 void APerlinProcterrain::AlterMesh(FVector impactPoint)
 {
-	for (int i = 0; i < Vertices.Num(); i++)
-	{
-		FVector tempVector = impactPoint - this->GetActorLocation();
+	// Convert impact point to local space once
+	const FVector LocalImpact = impactPoint - GetActorLocation();
 
-		if (FVector(Vertices[i] - tempVector).Size() < radius)
+	// Pre-compute squared radius (avoids expensive sqrt)
+	const float RadiusSq = radius * radius;
+
+	bool bAnyVertexAltered = false;
+
+	for (int32 i = 0; i < Vertices.Num(); ++i)
+	{
+		if (FVector::DistSquared(Vertices[i], LocalImpact) < RadiusSq)
 		{
-			Vertices[i] = Vertices[i] - Depth;
-			ProcMesh->UpdateMeshSection(sectionID, Vertices, Normals, UV0, UpVertexColors, TArray<FProcMeshTangent>());
+			Vertices[i] -= Depth;
+			bAnyVertexAltered = true;
 		}
+	}
+
+	// Update mesh only once if something changed
+	if (bAnyVertexAltered)
+	{
+		ProcMesh->UpdateMeshSection(sectionID, Vertices, Normals, UV0, UpVertexColors, TArray<FProcMeshTangent>());
 	}
 }
 
@@ -54,8 +59,7 @@ void APerlinProcterrain::CreateVertices()
 	{
 		for (int Y = 0; Y <= YSize; Y++)
 		{
-			float Z = FMath::PerlinNoise2D(FVector2D(X * NoiseScale + 0.1, Y * NoiseScale + 0.1)) * ZMultiplier;
-			GEngine->AddOnScreenDebugMessage(-1, 999.0f, FColor::Yellow, FString::Printf(TEXT("Z %f"), Z));
+			float Z = FMath::PerlinNoise2D(FVector2D(X * NoiseScale + 0.1f, Y * NoiseScale + 0.1f)) * ZMultiplier;
 			Vertices.Add(FVector(X * Scale, Y * Scale, Z));
 			UV0.Add(FVector2D(X * UVScale, Y * UVScale));
 		}
@@ -65,7 +69,7 @@ void APerlinProcterrain::CreateVertices()
 void APerlinProcterrain::CreateTriangles()
 {
 	int Vertex = 0;
-	
+
 	for (int X = 0; X < XSize; X++)
 	{
 		for (int Y = 0; Y < YSize; Y++)
@@ -76,10 +80,8 @@ void APerlinProcterrain::CreateTriangles()
 			Triangles.Add(Vertex + 1);
 			Triangles.Add(Vertex + YSize + 2);
 			Triangles.Add(Vertex + YSize + 1);
-
 			Vertex++;
 		}
 	}
-
 	Vertex++;
 }

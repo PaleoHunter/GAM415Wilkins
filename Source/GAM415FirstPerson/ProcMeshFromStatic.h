@@ -7,52 +7,57 @@
 #include "ProceduralMeshComponent.h"
 #include "ProcMeshFromStatic.generated.h"
 
+class UStaticMeshComponent;
+
 UCLASS()
 class GAM415FIRSTPERSON_API AProcMeshFromStatic : public AActor
 {
 	GENERATED_BODY()
-	
-public:	
+
+public:
 	// Sets default values for this actor's properties
 	AProcMeshFromStatic();
 
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
-
 	virtual void PostActorCreated() override;
-
 	virtual void PostLoad() override;
 
-public:	
+public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	UPROPERTY()
-		TArray<FVector> Vertices;
+	/** Source static mesh that will be converted to a procedural mesh */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Procedural Mesh")
+	UStaticMeshComponent* BaseMesh;
 
+	/** Geometry data extracted from the static mesh */
 	UPROPERTY()
-		TArray<int> Triangles;
-
-	UPROPERTY()
-		TArray<FVector> Normals;
-
-		TArray<FVector2D> UV0;
+	TArray<FVector> Vertices;
 
 	UPROPERTY()
-		TArray<FLinearColor> VertexColors;
+	TArray<int32> Triangles;
 
-		TArray<FColor> UpVertexColors;
+	UPROPERTY()
+	TArray<FVector> Normals;
 
-		TArray<FProcMeshTangent> Tangents;
+	UPROPERTY()
+	TArray<FVector2D> UV0;
 
-	UPROPERTY(EditAnywhere)
-		UStaticMeshComponent* baseMesh;
+	UPROPERTY()
+	TArray<FLinearColor> VertexColors;
+
+	UPROPERTY()
+	TArray<FColor> UpVertexColors;
+
+	UPROPERTY()
+	TArray<FProcMeshTangent> Tangents;
 
 private:
-	UProceduralMeshComponent* procMesh;
+	UPROPERTY()
+	UProceduralMeshComponent* ProcMesh;
+
 	void GetMeshData();
 	void CreateMesh();
-
-
 };

@@ -10,12 +10,16 @@
 #include "Components/ArrowComponent.h"
 #include "Portal.generated.h"
 
+class AGAM415FirstPersonCharacter;
+class UStaticMeshComponent;
+class UMaterialInterface;
+
 UCLASS()
 class GAM415FIRSTPERSON_API APortal : public AActor
 {
 	GENERATED_BODY()
-	
-public:	
+
+public:
 	// Sets default values for this actor's properties
 	APortal();
 
@@ -23,37 +27,54 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-public:	
+public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	UPROPERTY(EditAnywhere)
-		UStaticMeshComponent* mesh;
+	/** Visual mesh of the portal */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UStaticMeshComponent* Mesh;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		USceneCaptureComponent2D* sceneCapture;
+	/** Scene capture used to render the view through the other portal */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	USceneCaptureComponent2D* SceneCapture;
 
-	UPROPERTY(EditAnywhere)
-		UArrowComponent* rootArrow;
+	/** Arrow that marks the exact teleport destination */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UArrowComponent* RootArrow;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		UTextureRenderTarget2D* renderTarget;
+	/** Collision volume that triggers teleportation */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UBoxComponent* BoxComp;
 
-	UPROPERTY(EditAnywhere)
-		UBoxComponent* boxComp;
+	/** The linked portal that this one connects to */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Portal")
+	APortal* OtherPortal;
 
-	UPROPERTY(EditAnywhere)
-		APortal* OtherPortal;
+	/** Material applied to the portal mesh (usually uses the render target) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Portal")
+	UMaterialInterface* Mat;
 
-	UPROPERTY(EditAnywhere)
-		UMaterialInterface* mat;
+	/** Optional render target (can be set in the material instead) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Portal")
+	UTextureRenderTarget2D* RenderTarget;
 
+	/** Called when something overlaps the portal */
 	UFUNCTION()
-		void OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+	void OnOverlapBegin(
+		UPrimitiveComponent* OverlappedComp,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex,
+		bool bFromSweep,
+		const FHitResult& SweepResult
+	);
 
+	/** Resets the player's teleport cooldown flag */
 	UFUNCTION()
-		void SetBool(AGAM415FirstPersonCharacter* playerChar);
+	void SetBool(AGAM415FirstPersonCharacter* PlayerChar);
 
+	/** Updates the scene capture to show the correct view through the other portal */
 	UFUNCTION()
-		void UpdatePortals();
+	void UpdatePortals();
 };

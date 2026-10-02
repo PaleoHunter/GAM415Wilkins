@@ -1,67 +1,90 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "ProcMeshFromStatic.h"
 #include "KismetProceduralMeshLibrary.h"
+#include "Components/StaticMeshComponent.h"
+#include "ProceduralMeshComponent.h"
 
 // Sets default values
 AProcMeshFromStatic::AProcMeshFromStatic()
 {
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = false;
-	procMesh = CreateDefaultSubobject<UProceduralMeshComponent>("Proc Mesh");
-	baseMesh = CreateDefaultSubobject<UStaticMeshComponent>("Base Mesh");
 
-	RootComponent = procMesh;
-	baseMesh->SetupAttachment(procMesh);
+	ProcMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("Proc Mesh"));
+	BaseMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Base Mesh"));
+
+	RootComponent = ProcMesh;
+	BaseMesh->SetupAttachment(ProcMesh);
 }
 
 // Called when the game starts or when spawned
 void AProcMeshFromStatic::BeginPlay()
 {
 	Super::BeginPlay();
-	
 }
 
 void AProcMeshFromStatic::PostActorCreated()
 {
 	Super::PostActorCreated();
 	GetMeshData();
-
 }
 
 void AProcMeshFromStatic::PostLoad()
 {
 	Super::PostLoad();
 	GetMeshData();
-
 }
 
 void AProcMeshFromStatic::GetMeshData()
 {
-	UStaticMesh* mesh = baseMesh->GetStaticMesh();
-	if (mesh)
+	if (!BaseMesh)
 	{
-		UKismetProceduralMeshLibrary::GetSectionFromStaticMesh(mesh, 0, 0, Vertices, Triangles, Normals, UV0, Tangents);
-		procMesh->UpdateMeshSection(0, Vertices, Normals, UV0, UpVertexColors, Tangents);
-		CreateMesh();
+		return;
 	}
 
+	UStaticMesh* StaticMesh = BaseMesh->GetStaticMesh();
+	if (!StaticMesh)
+	{
+		return;
+	}
+
+	// Extract geometry data from the static mesh
+	UKismetProceduralMeshLibrary::GetSectionFromStaticMesh(
+		StaticMesh,
+		0,					// LOD Index
+		0,					// Section Index
+		Vertices,
+		Triangles,
+		Normals,
+		UV0,
+		Tangents
+	);
+
+	// Create (or recreate) the procedural mesh section
+	CreateMesh();
 }
 
 void AProcMeshFromStatic::CreateMesh()
 {
-	if (baseMesh)
+	if (!ProcMesh)
 	{
-		procMesh->CreateMeshSection(0, Vertices, Triangles, Normals, UV0, UpVertexColors, Tangents, true);
+		return;
 	}
 
+	ProcMesh->CreateMeshSection(
+		0,					// Section Index
+		Vertices,
+		Triangles,
+		Normals,
+		UV0,
+		UpVertexColors,
+		Tangents,
+		true				// Create collision
+	);
 }
 
 // Called every frame
 void AProcMeshFromStatic::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
 }
-

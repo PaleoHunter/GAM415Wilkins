@@ -7,45 +7,48 @@
 #include "ProcPlane.generated.h"
 
 class UProceduralMeshComponent;
+class UMaterialInterface;
 
 UCLASS()
 class GAM415FIRSTPERSON_API AProcPlane : public AActor
 {
 	GENERATED_BODY()
-	
-public:	
+
+public:
 	// Sets default values for this actor's properties
 	AProcPlane();
 
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
-
 	virtual void PostActorCreated() override;
-
 	virtual void PostLoad() override;
 
-public:	
+public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	UPROPERTY(EditAnywhere)
-		TArray<FVector> Vertices;
+	/** Vertex positions for the plane */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Procedural Mesh")
+	TArray<FVector> Vertices;
 
-	UPROPERTY(EditAnywhere)
-		TArray<int> Triangles;
+	/** Triangle indices */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Procedural Mesh")
+	TArray<int32> Triangles;
 
-	UPROPERTY(EditAnywhere)
-		TArray<FVector2D> UV0;
+	/** UV coordinates */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Procedural Mesh")
+	TArray<FVector2D> UV0;
 
-	UPROPERTY(EditAnywhere)
-		UMaterialInterface* PlaneMat;
+	/** Material applied to the procedural mesh */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Procedural Mesh")
+	UMaterialInterface* PlaneMat;
 
-	UFUNCTION()
-		void CreateMesh();
+	/** Builds (or rebuilds) the procedural mesh section */
+	UFUNCTION(BlueprintCallable, Category = "Procedural Mesh")
+	void CreateMesh();
 
 private:
-	UProceduralMeshComponent* procMesh;
-
-
+	UPROPERTY()
+	UProceduralMeshComponent* ProcMesh;
 };
